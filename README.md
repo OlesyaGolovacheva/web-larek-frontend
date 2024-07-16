@@ -96,11 +96,11 @@ export interface IBasket {
 
 ```
 export interface IOrderData {
-	paymentInfo: TPaymentInfo;
-	contactsInfo: TContactsInfo;
-	clearOrder(): void;
-	clearContacts(): void;
-	checkValidation(): boolean;
+    paymentInfo: TPaymentInfo;
+    contactsInfo: TContactsInfo;
+    clearOrder(): void;
+    clearContacts(): void;
+    checkValidation(): boolean;
     getOrderData(): IOrder;
 }
 ```
@@ -212,9 +212,6 @@ export type TPayment = 'card' | 'cash';
   - clearPaymentInfo(): void - очищает данные о способе оплаты и адресе
   - clearContactsInfo(): void - очищает контактные данные покупателя
   - checkValidation(): boolean - валидирует поля _paymentInfo и _contactInfo
-
-Также в классе содержатся методы для работы с данными объекта, который формирует класс:
-
   - set paymentInfo(info: TPaymentInfo): void - запись платежной информации
   - get paymentInfo(): TPaymentInfo - возвращает данные о способе оплаты и адресе
   - set contactsInfo(info: TContactsInfo): void - запись контактной информации
