@@ -42,11 +42,11 @@ yarn build
 ```
 ## Данные и типы данных, используемые в приложении
 
-Карточка товара
+Интерфейс карточки товара, которая приходит с сервера
 
 ```
-export interface IProduct {
-    _id: string;
+interface IProduct {
+    id: string;
     title: string;
     description: string;
     category: string;
@@ -55,66 +55,113 @@ export interface IProduct {
 }
 ```
 
-Интерфейс заказа
+Интерфейс готового заказа
 
 ```
-export interface IOrder {
-    _id: string;
+interface IOrder {
     payment: string;
     email: string;
     phone: string;
     address: string;
     total: number;
-    items: IProduct[];
+    items: string[];
 }
 ```
 
 Модель для хранения коллекции карточек на главной
 
 ```
-export interface IMainPage {
-    items: IProduct[];
+interface IMainPage {
+    productList: IProduct[];
     preview: string | null;
-    counter: number;
+    getPreview(id: string): IProduct;
 }
 ```
 
 Интерфейс корзины
 
 ```
-export interface IBasket {
-    productList: TItemBasket[];
-    addProduct(value: IProduct): void;
-    deleteProduct(id: string): void;
-    getTotal(): number;
-    getQuantity(): number;
-    clearBasket(): void;
-    checkValidation(): boolean;
+interface IBasket {
+  cardsInBasket: TItemBasket[];
+	addProduct(value: IProduct): void;
+  deleteProduct(id: string): void;
+  getTotal(): number;
+  clearBasket(): void;
+	isInBasket(productId: string): boolean;
+	getProductsInBasket(): IProduct[];
+	getProductIdsInBasket(): string[];   
 }
 ```
 Интерфейс оформления заказа
 
 ```
-export interface IOrderData {
-    paymentInfo: TPaymentInfo;
-    contactsInfo: TContactsInfo;
-    clearOrder(): void;
-    clearContacts(): void;
-    checkValidation(): boolean;
-    getOrderData(): IOrder;
+interface IOrderData {
+	paymentInfo: TPaymentInfo;
+	contactsInfo: TContactsInfo;
+	clearPayment(): void;
+	clearContacts(): void;
+	checkValidation(): boolean;
+}
+```
+Храним категории, потом при выводе карточек на главной
+В зависисмости от названия будем подсветку категории соответствующую делать в шаблоне
+
+```
+enum CategoryType {
+	OTHER = 'другое',
+	SOFT_SKILL = 'софт-скил',
+	ADDITIONAL = 'дополнительное',
+	BUTTON = 'кнопка',
+	HARD_SKILL = 'хард-скил',
+}
+```
+Интерфейс карточки товара для хранения карточки в корзине и работы с ней
+
+```
+interface ICard {
+  id: string;
+	index: number;
+	description: string;
+	image: string;
+	inBasket: boolean;
+	title: string;
+	category: string;
+	price: number | null;
+}
+```
+Интерфейс для хранения информации о способе оплаты и адресе доставки
+
+```
+interface IOrderInfo {
+    payment: TPayment | null;
+    address: string;    
+}
+```
+
+Интерфейс события клика мыши
+
+```
+interface ICardAction {
+	onClick: (event: MouseEvent) => void;
 }
 ```
 
 Данные для модального окна просмотра корзины
 
 ```
-export type TItemBasket = Pick<IProduct, 'title'|'price'>;
+type TItemBasket = Pick<IProduct, 'title'|'price'>;
 ```
 
 Данные покупателя в форме заполнения адреса доставки и выбора формы платежа
 
 ```
-export type TPaymentInfo = Pick<IOrder, 'payment'|'address'>;
+type TPaymentInfo = Pick<IOrder, 'payment'|'address'>;
+```
+
+Данные для выбора типа оплаты
+
+```
+type TPayment = 'card' | 'cash';
 ```
 
 Данные покупателя в форме заполнения контактных данных (телефон и e-mail)
@@ -126,12 +173,12 @@ export type TContactsInfo = Pick<IOrder, 'email' | 'phone'>;
 Данные для модального окна успешной оплаты
 
 ```
-export type TSuccessfulPayment = Pick<IBasket, 'getTotal'>;
+type TOrderSuccessInfo = {orderTotal: number;}
 ```
 
-Тип оплаты
+Для валидации данных из форм заполнения адреса и контактов
 ```
-export type TPayment = 'card' | 'cash';
+export type TFormErrors = Partial<Record<keyof IOrder, string>>;
 ```
 
 ## Архитектура приложения
@@ -154,6 +201,9 @@ export type TPayment = 'card' | 'cash';
 
 Основные методы, реализуемые классом описаны интерфейсом `IEvents`:
   - `on` - подписка на событие
+  - `onAll` - слушать все события
+  - `off` - снять обработчик с события
+  - `offAll` - сбросить все обработчики
   - `emit` - инициализация события
   - `trigger` - возвращает функцию, при вызове которой инициализируется требуемое в параметрах событие
 
@@ -167,13 +217,12 @@ export type TPayment = 'card' | 'cash';
 
   - _productList: IProduct[] - массив объектов товаров 
   - _preview: string | null - id карточки, выбранной для просмотра в модальном окне
-  - counter: number - счетчик товаров в корзине
   - events: IEvents - экземпляр класса `EventEmitter` для инициации событий при изменении данных.
 
 Так же класс предоставляет набор методов для взаимодействия с этими данными:
 
   - get productsList(): IProduct[] - возвращает массив товаров.
-  - get preview(): string | null - возвращает выбранную карточку товара.
+  - getPreview(): string | null - возвращает выбранную карточку товара.
 
 #### Класс BasketData
 Класс отвечает за хранение данных товаров в корзинею
@@ -181,19 +230,20 @@ export type TPayment = 'card' | 'cash';
 
 В полях класса хранятся следующие данные:
 
-  - _productList: TItemBasket[] - коллекция товаров в корзине
+  - _cardsInBasket: TItemBasket[] - коллекция товаров в корзине
   - _total: number - итоговая стоимость товаров в корзине
   - events: IEvents - экземпляр класса `EventEmitter` для инициации событий при изменении данных.
 
 Так же класс предоставляет набор методов для взаимодействия с этими данными:
 
-  - addProduct(value: TItemBasket[]): void - добавляет товар в корзину и вызывает событие изменение массива
-  - deleteProduct(id: string): void - удаляет товар из корзины и вызывает событие изменение массива
-  - checkValidation(): boolean - валидирует данные заказа
-  - clearBasket(): void - очищает корзину
-  - getProductList(): TItemBasket[] - список товаров в корзине
   - getTotal(): number - сумма заказа
-  - getQuantity(): number - возвращает текущее количество товаров в корзине
+  - getProductIdsInBasket - возвращаем массив id, для отправки заказа на сервер
+  - isInBasket - проверяем по id наличие товара в корзине чтобы не добавить дважды
+  - getProductsInBasket - возвращаем массив товаров, добавленных в корзине
+  - addProduct(product: IProduct) - добавляем товар в корзину и вызывает событие изменение массива
+  - deleteProduct(id: string) - удаляем товар из корзины и вызывает событие изменение массива
+  - clearBasket - очищаем корзину
+  - cardsInBasket - возвращаеv массив карточек добавленных в корзину
 
 #### Класс OrderData
 Класс отвечает за хранение и логику работы с данными заказа.
@@ -204,18 +254,21 @@ export type TPayment = 'card' | 'cash';
   - _paymentInfo: TPaymentInfo - платежная информация
   - _contactInfo: TContactsInfo - контактная информация
   - order: IOrder - заказ
+  - formErrors - ошибки валидации форм
   - events: IEvents - экземпляр класса `EventEmitter` для инициации событий при изменении данных.
 
 Так же класс предоставляет набор методов для взаимодействия с этими данными.
 
-  - getOrderData(): IOrder- для получения данных о заказе
-  - clearPaymentInfo(): void - очищает данные о способе оплаты и адресе
-  - clearContactsInfo(): void - очищает контактные данные покупателя
-  - checkValidation(): boolean - валидирует поля _paymentInfo и _contactInfo
+	- clearPayment() - для очистки данных формы заполнения оплаты и адреса доставки
+  - clearContacts() для очистки данных формы контактов
+  - checkValidation(): boolean - валидирует поля _paymentInfo и _contactInfo и устанавливает ошибки, вызывает событие formErrors:change
   - set paymentInfo(info: TPaymentInfo): void - запись платежной информации
-  - get paymentInfo(): TPaymentInfo - возвращает данные о способе оплаты и адресе
   - set contactsInfo(info: TContactsInfo): void - запись контактной информации
+  - get paymentInfo(): TPaymentInfo - возвращает данные о способе оплаты и адресе
   - get contacstInfo(): TContactsInfo - возвращает контактную информацию
+	- validateContactInfo() - валидирует форму контактов и устанавливает событие сontacts:ready
+  - validatePaymentInfo() - валидирует форму оплаты и устанавливает событие сontacts:ready
+  -	updateInputFields( field: keyof IOrder, value: string ) - валидируем инпуты, на случай если пользователь стер даннве из инпутов, чтобы повторно отработала checkValidation, в случае пустых инпутов
 
 ### Классы представления
 
@@ -237,6 +290,13 @@ export type TPayment = 'card' | 'cash';
 Также в классе содержатся методы для работы с данными объекта, который формирует класс:
 
   - render(data?: Partial<T>): HTMLElement - возвращает отрисованный html элемент по переданным данным
+  - toggleClass - Переключает наличие CSS-класса className у элемента element
+  - setText - Устанавливает текстовое содержимое элемента element значением value
+  - setDisabled - Устанавливает состояние блокировки элемента element
+  - state - true для блокировки, false для разблокировки
+  - setHidden - Скрывает элемент element (устанавливает display: none).
+  - setVisible - Показывает элемент element (удаляет свойство display).
+  - setImage - Устанавливает источник изображения src и альтернативный текст alt для элемента element.
 
 #### Класс MainPage
 Класс расширяет класс Component. Представляет собой компонент для отображения главной страницы приложения, отвечает за отображение списка товаров и иконку корзины покупателя со счетчиком товаров.
@@ -244,24 +304,15 @@ export type TPayment = 'card' | 'cash';
 Поля класса:
 
   - _catalog: HTMLElement[] - контейнер для каталога товаров
+	- wrapper: HTMLElement - элемент обертки страницы.
   - basketButton: HTMLElement - кнопка открытия корзины в модальном окне
-  - basketCounter: HTMLElement - элемент счетчика товаров в корзине
+  - _basketCounter: HTMLElement - элемент счетчика товаров в корзине
 
 Методы класса:
 
-  - set lock(value: boolean) - устанавливает состояние блокировки страницы.
-  - set count(value: number) - устанавливает счетчик товаров в корзине.
-  - set productList(items: HTMLElement[]) - выводит товары на страницу.
-
-#### Класс CatalogCard
-Класс расширяет класс Component. Отвечает за отображение карточки товара в каталоге. Устанавливает значения следующих элементов:
-
-  - _category: HTMLElement - категория товара
-  - _title: HTMLElement - заголовок товара
-  - _image: HTMLImageElement - изображение товара
-  - _price: HTMLElement - стоимость товара
-
-В конструктор передается элемент карточки и объект с обработчиком события. По клику на карточку открывается модальное окно с информацией о товаре.
+  - set locked - устанавливает состояние блокировки страницы.
+  - set count - устанавливает счетчик товаров в корзине.
+  - set catalog - выводит товары на страницу.
 
 #### Класс Modal
 Класс расширяет класс Component. Реализует модальное окно. Предназначен для отображения таких компонентов как PreviewProduct, Basket, Payment, Contacts, Success. Так же представляет методы `open` и `close` для управления отображением модального окна, устанавливает слушатели на клик в оверлей и кнопку-крестик для закрытия попапа.
@@ -275,76 +326,84 @@ export type TPayment = 'card' | 'cash';
 
   - open() - метод отображения модального окна, запускает событие, блокирующее прокрутку страницы
   - close() - метод для закрытия модального окна, запускает событие, разблокирующее прокрутку страницы
-  - set content(value: HTMLElement): void - для возможности изменения внутреннего содержимого модального окна
+  - render() - перерисовываем содержимое модального окна
 
-#### Класс PreviewProductCard
-Класс расширяет класс Component. Отвечает за отображение подробной информации о товаре и возможностью добавления его в корзину.
+#### Класс Card
+Класс расширяет класс Component. Отвечает за отображение карточки товара в каталоге.
 
 Поля класса:
-  - _id - id выбранной карточки
-  - _image: HTMLImageElement - изображение товара
-  - _category: HTMLElement - категория товара
-  - _title: HTMLElement - заголовок товара
-  - _description: HTMLElement - описание товара
-  - _price: HTMLElement - стоимость товара
+  - events: IEvents - объект класса EventEmitter для инициации событий при изменении данных.
+	- cardId: string - ID карточки товара
+	- cardTitle: HTMLHeadingElement - элемент заголовка карточки товара
+	- cardPrice: HTMLSpanElement - элемент цены карточки товара
+	- cardImage: HTMLImageElement - элемент изображения карточки товара
+	- cardCategory: HTMLSpanElement - элемент категории карточки товара
+	- cardDescription: HTMLParagraphElement - элемент описания карточки товара
+	- button: HTMLButtonElement - кнопка карточки товара
+	- cardIndex: HTMLSpanElement - индекс карточки товара
+
+В конструктор передается элемент карточки и объект с обработчиком события. По клику на карточку открывается модальное окно с информацией о товаре.
 
 Методы класса:
-  - set product(): IProduct - устанавливает инофрмацию о товаре, в случае если цена продукта равна null то в поле с ценой записывается строка бесценно.
-  - set inBasket(): boolean - если true, то отключает кнопку добавить в корзину и меняет её текст на 'в корзине'.
-  - render - принимает в качестве параметров product: IProduct, inBasket: boolean.
+  - category(value: CategoryType) -  Устанавливает категорию
+  - set index(index: number) - устанавливает индекс товара для корзины
+  - get id(): string - получаем id выбранного товара
+  - set id(id: string) - сохраняем id выбранного товара
+  - get title(): string - получаем заголовок
+  - set title(title: string) - устанавливаем заголовок
+  - set price(price: number | null) - устанавливаем цену
+  - set description(description: string) - устанавливаем описание
+  - set image(src: string) - устанавливаем изображение
+  - set inBasket(state: boolean) - меняем состояние кнопки
 
-#### Класс ProductBasket
+#### Класс Basket
 Класс расширяет класс Component. Отвечает за отображение списка выбранных товаров и общей стоимости заказа.
 
 Поля класса:
 
   - _basketList: HTMLElement - элемент-контейнер списка товаров
-  - _basketPrice: HTMLElement - элемент с текстом об общей стоимости товаров в корзине
+  - _basketTotal: HTMLElement - элемент с текстом об общей стоимости товаров в корзине
+  - button: HTMLButtonElement - кнопка оформить
 
-В конструктор передается элемент корзины и объект с обработчиком события. Обработчик устанавливается на кнопку начала заказа. Если в корзине нет товаров, кнопка заблокирована и отображается текст сообщения об ошибке.
+В конструктор передается элемент корзины и объект с обработчиком события. Обработчик устанавливается на кнопку начала заказа. Если в корзине нет товаров, кнопка заблокирована.
 
-#### Класс BasketCard
-Класс расширяет класс Component. Отвечает за отображение элемента товара в списке товаров корзины.
+Методы класса:
 
-Ипользует для отображения TItemBasket, где:
-  - _itemIndex: HTMLElement - порядковый номер товара в корзине, берется из массива
-  - _title: HTMLElement - заголовок карточки товара
-  - _price: HTMLElement - стоимость товара
-
-В конструктор передается элемент карточки и объект с обработчиком события клика по кнопке удаления товара из корзины.
+  - set basketTotal - записываем общую стоимость товаров к корзине
+  - set basketList - записываем список товаров в корзине
+  - disableButton() - блокируем кнопку оформления заказа, если корзина пустая
 
 #### Класс Form
 Класс расширяет класс Component. Является абстрактным классом дженериком и шаблоном для форм приложения. Реализует пользовательский функционал с формами.
 
 Поля класса:
 
-  - container: HTMLFormElement - соответствующая форма
-  - inputsList: HTMLInputElement[] - массив input элементов формы
-  - submitButton: HTMLButtonElement - кнопка отправки данных формы
+  - _submit: HTMLButtonElement - кнопка отправки данных формы
   - _errors: HTMLElement - html элемент для отображения текста ошибок формы, при наличии/отсутствии ошибок - блокирует/разблокирует кнопку подтверждения данных формы.
 
 Методы класса:
 
-  - get valid(): boolean - получения статуса валидности формы
-  - set valid(value: boolean):void - сеттер для блокировки/разблокировки кнопки submit
+  - onInputChange() - получает инпуты формы и отслеживает их изменения
+  - set valid(value: boolean) - сеттер для блокировки/разблокировки кнопки submit
   - set errors(value: string) - установка текста ошибок
-  - clear():void - очистка формы при её закрытии
 
 #### Класс Payment
 Класс расширяет класс Component. Отвечает за отображение первого окна формы заказа. Расширяет базовый класс Form.
 
 Поля класса:
 
-  - cardButton: HTMLButtonElement - оплата онлайн
-  - cashButton: HTMLButtonElement - оплата при получении заказа
   - inputAddress: HTMLInputElement - поле ввода адреса доставки заказа
+  - buttonCard: HTMLButtonElement - оплата онлайн
+  - buttonCash: HTMLButtonElement - оплата при получении заказа
+  - orderButtonElement: HTMLButtonElement - кнопка формы
 
 Методы класса:
 
+  - handlePaymentButtonClick() - переключение способа оплаты
   - get payment(): TPayment - возвращает способ оплаты
   - get address(): string - возвращает адрес доставки заказа
-  - get valid(): boolean - возвращает валидность формы
-  - clear(): void - очищает форму и снимает класс активности с кнопок
+  - set payment - записывает способ оплаты
+  - set address - записывает адресс
 
 #### Класс Contacts
 Класс расширяет класс Component. Отвечает за отображение второго окна формы заказа. Класс расширяет базовый класс Form.
@@ -353,23 +412,23 @@ export type TPayment = 'card' | 'cash';
 
 Поля класса:
 
-  - emailInput: HTMLInputElement - поле ввода адреса email
-  - phoneInput: HTMLInputElement - поле ввода телефона
+  - inputEmail: HTMLInputElement - поле ввода адреса email
+  - inputPhone: HTMLInputElement - поле ввода телефона
 
 Методы класса:
 
   - get email(): string - возвращает email
   - get phone(): string - возвращает номер телефона
-  - get valid(): boolean - возвращает валидность формы
+  - set email(): string - записывает email
+  - set phone(): string - записывает номер телефона
 
 #### Класс Success
 Класс расширяет класс Component. Отвечает за отображение блока подтверждения заказа.
 
 Поля класса:
 
-  - buttonOrderSuccess: HTMLButtonElement - кнопка "За новыми покупками"
+  - button: HTMLButtonElement - кнопка "За новыми покупками"
   - _orderTotal: HTMLElement - элемент для отображения общей стоимости заказа
-  - events: IEvents - экзепляр брокера событий
 
 Методы класса:
 
@@ -377,7 +436,7 @@ export type TPayment = 'card' | 'cash';
 
 ### Слой коммуникации
 
-#### Класс AppApi
+#### Класс WebLarekApi
 Принимает в конструктор экземпляр класса Api и предоставляет методы реализующие взаимодействие с бэкендом сервиса.
 
 Методы класса:
@@ -403,14 +462,17 @@ export type TPayment = 'card' | 'cash';
 
   - modal:open - открытие модального окна
   - modal:closed - закрытие модального окна
-  - card:select - выбор карточки товара для отображения в модальном окне
-  - card:add - добавление товара в корзину
-  - card:delete - удаление товара из корзины
-  - basket:submit - нажатие на кнопку оформления заказа в корзине
-  - productList:change - изменение списка товаров в корзине (при добавлении и удалении товара)
-  - payment:valid - взаимодествие пользователя с полями формы способа оплаты
+  - cards:changed - вывод карточек на страницу, изменение списка товаров в корзине (при добавлении и удалении товара)
+  - preview:selected - выбор карточки товара для отображения в модальном окне
+  - card:toBasket - добавление товара в корзину
+  - basket:open - открытие корзины товаров
+  - basket:delete - удаление товара из корзины
+  - basket:order - нажатие на кнопку оформления заказа в корзине
+  - order:valid - взаимодействие пользователя с полями формы доставки
+  - contacts:valid - заимодействие пользователя с полями формы контактов
+  - formErrors:change - изменилось состояние валидации формы
+  - orderInput:change - изменились введенные данные
   - payment:submit - успешное прохождение формы со способом оплаты и адреса
-  - contacts:valid - взаимодествие пользователя с полями формы контактных данных
   - contacts:submit - успешное прохождение формы контактных данных.
   - success: submit - успешное оформлении заказа и возвращение к списку товаров
   
@@ -423,7 +485,10 @@ export type TPayment = 'card' | 'cash';
    - В свою очередь в обработчике  события preview:change выполнение приложения переходит в класс Modal (опять View), который с помощью своих методов  отрисовывает модальное окно конкретного товара, получая его данные.
 
   Пользователь кликнул по кнопке открытия корзины:
-   - Действие приложения перешло в класс ProductBasket (это класс отображения View).
-   - Обработчик события клика, привязанный в ProductBasket к элементу иконки корзины, вызывает метод emit посредника (класса EventEmitter, Present). Presenter спросит Model о наличии добавленных товаров. Если пользователь уже добавил что-то в корзину, Model сообщит об этом.
-   - Presenter отправит View задание отрисовать нумированный список с кнопками удаления каждого товара из корзины, навесит одноразовые слушатели на эти кнопки, а также повесит слушатель на кнопку оформления заказа.
-   - В свою очередь в обработчике события basket:change выполнение приложения переходит в класс Modal (опять View), который с помощью своих методов  отрисовывает модальное окно просмотра корзины и блокировки прокрутки фона, получая его данные.
+   - View-Presenter: Пользователь кликнул по кнопке открытия корзины. Обработчик события клика, привязанный в MainPage к элементу иконки корзины, вызывает метод emit посредника (класса EventEmitter, Present), который вызовет обработчик события basket:open.
+
+   - Present-Model: Обработчик basket:open на основе данных, которые у нас хранятся в модели данных basketData.cardsInBasket формирует карточки и вешает событие events.emit('basket:delete', item) на иконки удаления карточки. Методом getTotal получает список карточек и итоговую сумму товаров в корзине.
+   
+   - Действие приложения перешло в класс Basket (это класс отображения View). Где на основе сформированного ранее списка карточек.
+
+   - Затем методом modal.open переходим в класс Modal (опять View), который с помощью своих методов  отрисовывает модальное корзины, получая ее данные. Скрывает кнопку оформить при отсутствии товаров.
