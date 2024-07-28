@@ -49,6 +49,10 @@ export class Card extends Component<ICard> {
     // устанавливаем категорию
 	set category(value: CategoryType) {
 		this.setText(this.cardCategory, value);
+		Object.entries(categoryClasses)
+		.map(([key, value]) => value)
+		.filter(cat=> this.cardCategory.classList.contains(cat))
+		.map(cat=> this.toggleClass(this.cardCategory, cat, false));
 		this.cardCategory.classList.add(categoryClasses[value]);
 	}
 
